@@ -12,7 +12,7 @@
     },
     {
       name: 'armExporter',
-      enabled: false,
+      enabled: true,
       file: import 'modules/arm_exporter.jsonnet',
     },
     {
@@ -32,7 +32,7 @@
     },
     {
       name: 'traefikExporter',
-      enabled: false,
+      enabled: true,
       file: import 'modules/traefik.jsonnet',
     },
     {
@@ -48,17 +48,20 @@
   ],
 
   k3s: {
-    enabled: false,
-    master_ip: ['192.168.1.15'],
+    enabled: true,
+    master_ip: ['192.168.50.178'],
   },
 
   // Domain suffix for the ingresses
-  suffixDomain: '192.168.1.15.nip.io',
+  suffixDomain: 'gower.cloud',
   // Additional domain suffixes for the ingresses.
   // For example suffixDomain could be an external one and this a local domain.
   additionalDomains: [],
   // If TLSingress is true, a self-signed HTTPS ingress with redirect will be created
   TLSingress: true,
+  // If UseCertSecret is true, provided cert secret created with cert-manager with be used on created HTTPS ingresses.
+  UseCertSecret: true,
+  CertSecret: 'gower-cloud-cert',
   // If UseProvidedCerts is true, provided files will be used on created HTTPS ingresses.
   // Use a wildcard certificate for the domain like ex. "*.192.168.99.100.nip.io"
   UseProvidedCerts: false,
@@ -80,19 +83,28 @@
     grafanaSizePV: '20Gi',
   },
 
+  // Configuration for AlertManager deployment
+  alertmanager: {
+    overrideTargetPort: true,
+    targetPort: 9093
+  },
   // Configuration for Prometheus deployment
   prometheus: {
     retention: '15d',
     scrapeInterval: '30s',
     scrapeTimeout: '30s',
+    overrideTargetPort: true,
+    targetPort: 9090
   },
   grafana: {
     // Grafana "from" email
-    from_address: 'myemail@gmail.com',
+    from_address: 'grafana@gower.cloud',
     // Plugins to be installed at runtime.
     //Ex. plugins: ['grafana-piechart-panel', 'grafana-clock-panel'],
     plugins: [],
     //Ex. env: [ { name: 'http_proxy', value: 'host:8080' } ]
-    env: []
+    env: [],
+    overrideTargetPort: true,
+    targetPort: 3000
   },
 }

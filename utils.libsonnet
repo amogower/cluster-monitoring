@@ -156,6 +156,66 @@ local k = import 'ksonnet/ksonnet.beta.4/k.libsonnet';
     )
   ),
 
+   // Creates IngressRoute objects
+  newIngressRoute(name, namespace, routes, path, serviceName, servicePort):: (
+    {
+      apiVersion: 'traefik.containo.us/v1alpha1',
+      kind: 'IngressRoute',
+      metadata: {
+        name: name,
+        namespace: namespace,
+      },
+      spec: {
+        entryPoints: [
+          'web',
+          'websecure'
+        ],
+        routes: [$.newIngressRouteRoute(route, path, serviceName, servicePort) for route in routes],
+      },
+    }
+  ),
+
+  // Add route to IngressRoute resource
+  newIngressRouteRoute(route, path='', serviceName, servicePort):: (
+    {
+      match: 'Host(`' + route + '`)' + (if path != '/' then ' && PathPrefix(`' + path + '`)' else ''),
+      kind: 'Rule',
+      services: [
+        {
+          name: serviceName,
+          port: servicePort,
+        },
+      ],
+    }
+  ),
+
+  // Add TLS to IngressRoute resource with secret containing the certificates if exists
+  addIngressRouteTLS(I, secretName):: (
+    // local ingress = k.networking.v1beta1.ingress;
+    // local ingressTls = ingress.mixin.spec.tlsType;
+    local namespace = I.metadata.namespace;
+    local ingressRoute = {
+      mixin:: {
+        spec:: {
+          local __specMixin(spec) = { spec+: spec },
+          new():: {},
+          tlsType:: {
+            new():: {},
+            withSecretName(secretName):: self + { secretName: secretName },
+          },
+          // withTls(tls):: self + { tls: tls },
+          withTls(tls):: self + __specMixin({ tls: tls }),
+        },
+      },
+    };
+    local ingressTls = ingressRoute.mixin.spec.tlsType;
+
+    I + ingressRoute.mixin.spec.withTls(
+      ingressTls.new() +
+      ingressTls.withSecretName(secretName)
+    )
+  ),
+
   // Creates new basic deployments
   newDeployment(name, namespace, image, cmd, port):: (
     local deployment = k.apps.v1.deployment;

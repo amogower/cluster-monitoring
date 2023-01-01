@@ -67,6 +67,25 @@ local vars = import 'vars.jsonnet';
   // End of _config
   //---------------------------------------
 
+  alertmanager+:: {
+    service+: if vars.alertmanager.overrideTargetPort then {
+      spec+: {
+        ports:
+          std.map(
+            function(p)
+              if p.name == 'web' then
+                {
+                  name: 'web',
+                  port: 9093,
+                  targetPort: vars.alertmanager.targetPort
+                }
+              else p,
+            super.ports
+          ),
+      },
+    } else {},
+  },
+
   prometheus+:: {
     // Add option (from vars.yaml) to enable persistence
     local pvc = k.core.v1.persistentVolumeClaim,
@@ -90,11 +109,43 @@ local vars = import 'vars.jsonnet';
                   },
                 } else {}),
     },
+    service+: if vars.prometheus.overrideTargetPort then {
+      spec+: {
+        ports:
+          std.map(
+            function(p)
+              if p.name == 'web' then
+                {
+                  name: 'web',
+                  port: 9090,
+                  targetPort: vars.prometheus.targetPort
+                }
+              else p,
+            super.ports
+          ),
+      },
+    } else {},
   },
 
-  // Override deployment for Grafana data persistence
-  grafana+:: if vars.enablePersistence.grafana then {
-    deployment+: {
+  // Override service for Grafana if targetPort provided
+  grafana+:: {
+    service+: if vars.grafana.overrideTargetPort then {
+      spec+: {
+        ports:
+          std.map(
+            function(p)
+              if p.name == 'http' then
+                {
+                  name: 'http',
+                  port: 3000,
+                  targetPort: vars.grafana.targetPort
+                }
+              else p,
+            super.ports
+          ),
+      },
+    } else {},
+    deployment+: if vars.enablePersistence.grafana then {
       spec+: {
         template+: {
           spec+: {
@@ -119,27 +170,28 @@ local vars = import 'vars.jsonnet';
           },
         },
       },
-    },
-    storage:
-      local pvc = k.core.v1.persistentVolumeClaim;
+    } else {},
+    [if vars.enablePersistence.grafana then 'storage' else null]:
+      (local pvc = k.core.v1.persistentVolumeClaim;
       pvc.new() +
       pvc.mixin.metadata.withNamespace($._config.namespace) +
       pvc.mixin.metadata.withName('grafana-storage') +
       pvc.mixin.spec.withAccessModes('ReadWriteOnce') +
       pvc.mixin.spec.resources.withRequests({ storage: vars.enablePersistence.grafanaSizePV }) +
       (if vars.enablePersistence.grafanaPV != null then pvc.mixin.spec.withVolumeName(vars.enablePersistence.grafanaPV)) +
-      (if vars.enablePersistence.storageClass != null then pvc.mixin.spec.withStorageClassName(vars.enablePersistence.storageClass)),
-
-  } else {},
+      (if vars.enablePersistence.storageClass != null then pvc.mixin.spec.withStorageClassName(vars.enablePersistence.storageClass)))
+  },
 
   grafanaDashboards+:: $._config.grafanaDashboards,
 
   // Create ingress objects per application
   ingress+:: {
     alertmanager:
-      local I = utils.newIngress('alertmanager-main', $._config.namespace, $._config.urls.alert_ingress, '/', 'alertmanager-main', 'web');
+      local I = utils.newIngressRoute('alertmanager-main', $._config.namespace, $._config.urls.alert_ingress, '/', 'alertmanager-main', 9093);
       if vars.TLSingress then
-        if vars.UseProvidedCerts then
+        if vars.UseCertSecret then
+          utils.addIngressRouteTLS(I, vars.CertSecret)
+        else if vars.UseProvidedCerts then
           utils.addIngressTLS(I, $._config.urls.alert_ingress, 'ingress-secret')
         else
           utils.addIngressTLS(I, $._config.urls.alert_ingress)
@@ -147,9 +199,11 @@ local vars = import 'vars.jsonnet';
         I,
 
     grafana:
-      local I = utils.newIngress('grafana', $._config.namespace, $._config.urls.grafana_ingress, '/', 'grafana', 'http');
+      local I = utils.newIngressRoute('grafana', $._config.namespace, $._config.urls.grafana_ingress, '/', 'grafana', 3000);
       if vars.TLSingress then
-        if vars.UseProvidedCerts then
+        if vars.UseCertSecret then
+          utils.addIngressRouteTLS(I, vars.CertSecret)
+        else if vars.UseProvidedCerts then
           utils.addIngressTLS(I, $._config.urls.grafana_ingress, 'ingress-secret')
         else
           utils.addIngressTLS(I, $._config.urls.grafana_ingress)
@@ -157,9 +211,11 @@ local vars = import 'vars.jsonnet';
         I,
 
     prometheus:
-      local I = utils.newIngress('prometheus-k8s', $._config.namespace, $._config.urls.prom_ingress, '/', 'prometheus-k8s', 'web');
+      local I = utils.newIngressRoute('prometheus-k8s', $._config.namespace, $._config.urls.prom_ingress, '/', 'prometheus-k8s', 9090);
       if vars.TLSingress then
-        if vars.UseProvidedCerts then
+        if vars.UseCertSecret then
+          utils.addIngressRouteTLS(I, vars.CertSecret)
+        else if vars.UseProvidedCerts then
           utils.addIngressTLS(I, $._config.urls.prom_ingress, 'ingress-secret')
         else
           utils.addIngressTLS(I, $._config.urls.prom_ingress)

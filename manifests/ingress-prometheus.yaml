@@ -1,20 +1,17 @@
-apiVersion: networking.k8s.io/v1
-kind: Ingress
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
 metadata:
   name: prometheus-k8s
   namespace: monitoring
 spec:
-  rules:
-  - host: prometheus.192.168.1.15.nip.io
-    http:
-      paths:
-      - backend:
-          service:
-            name: prometheus-k8s
-            port:
-              name: web
-        path: /
-        pathType: Prefix
+  entryPoints:
+  - web
+  - websecure
+  routes:
+  - kind: Rule
+    match: Host(`prometheus.gower.cloud`)
+    services:
+    - name: prometheus-k8s
+      port: 9090
   tls:
-  - hosts:
-    - prometheus.192.168.1.15.nip.io
+    secretName: gower-cloud-cert

@@ -1,14 +1,14 @@
 apiVersion: v1
-kind: Service
+kind: Endpoints
 metadata:
   labels:
-    k8s-app: kube-scheduler
+    k8s-app: kube-scheduler-prometheus-discovery
   name: kube-scheduler-prometheus-discovery
   namespace: kube-system
-spec:
-  clusterIP: None
+subsets:
+- addresses:
+  - ip: 192.168.50.178
   ports:
   - name: http-metrics
     port: 10251
-    targetPort: 10251
-  selector: {}
+    protocol: TCP
